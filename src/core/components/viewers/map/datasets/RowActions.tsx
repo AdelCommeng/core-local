@@ -6,7 +6,6 @@
 // Dependencies
 import React from 'react'
 import { usePermissions } from '../../../../store'
-
 // Utility functions
 import { handleFavouriteDataset } from './utils'
 
@@ -23,12 +22,14 @@ interface RowActionsProps {
   dataset: Dataset
   favouriteDatasets: Dataset[]
   setFavouriteDatasets: React.Dispatch<React.SetStateAction<Dataset[]>>
+  martinBaseUrl?: string
 }
 
 export default function RowActions({
   dataset,
   favouriteDatasets,
   setFavouriteDatasets,
+  martinBaseUrl,
 }: RowActionsProps) {
   // Permissions
   const { ability } = usePermissions()
@@ -144,7 +145,7 @@ export default function RowActions({
       // (REFRESH_ORG_DATASETS) re-samples a vector tile per dataset to detect geometry,
       // which can take several seconds; without this the row only flips after that lands
       // (or after the dialog is reopened). The refetch reconciles this swap when it finishes.
-      const tileBaseUrl = (process.env.NEXT_PUBLIC_MARTIN_SERVER_URL ?? '').replace(/\/+$/, '')
+      const tileBaseUrl = (martinBaseUrl ?? '').replace(/\/+$/, '')
       const minioId = `org-minio-${fileId}`
       const [optimistic] = buildPublishedTileDatasets(
         [{
@@ -219,12 +220,12 @@ export default function RowActions({
   }
 
   return (
-    <div className="flex items-center">
+    <div className="flex items-center flex-nowrap gap-0.5 sm:gap-1">
       <Button
         size="icon"
         variant="ghost"
         // onClick={handleApplyDataset}
-        className=" hover:bg-transparent"
+        className="h-8 w-8 sm:h-9 sm:w-9 hover:bg-transparent"
         disabled={!ability.can('read', 'File')}
       >
         <Checkbox
@@ -239,7 +240,7 @@ export default function RowActions({
       <Button
         variant="ghost"
         size="icon"
-        className={`opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent ${isFavourite ? 'opacity-100' : ''}`}
+        className={`h-8 w-8 sm:h-9 sm:w-9 opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent ${isFavourite ? 'opacity-100' : ''}`}
         onClick={handleFavourite}
         disabled={!ability.can('read', 'File')}
       >
@@ -254,7 +255,7 @@ export default function RowActions({
           variant="ghost"
           size="icon"
           title={published ? 'Tiled' : 'Publish as vector tiles'}
-          className="opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent"
+          className="h-8 w-8 sm:h-9 sm:w-9 opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent"
           onClick={onPublish}
           disabled={publishing || published || !ability.can('update', 'File')}
         >
@@ -267,7 +268,7 @@ export default function RowActions({
           variant="ghost"
           size="icon"
           title={publishedCatalog ? 'Tiled' : 'Publish open-data dataset as vector tiles'}
-          className="opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent"
+          className="h-8 w-8 sm:h-9 sm:w-9 opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent"
           onClick={onPublishCatalog}
           disabled={publishingCatalog || publishedCatalog || !ability.can('update', 'File')}
         >
@@ -280,7 +281,7 @@ export default function RowActions({
           variant="ghost"
           size="icon"
           title={unpublished ? 'Un-published' : 'Un-publish vector tiles'}
-          className="opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent"
+          className="h-8 w-8 sm:h-9 sm:w-9 opacity-70 hover:opacity-100 transition-opacity duration-200 hover:bg-transparent"
           onClick={onUnpublish}
           disabled={unpublishing || unpublished || !ability.can('update', 'File')}
         >

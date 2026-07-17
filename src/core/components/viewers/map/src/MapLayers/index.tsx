@@ -7,12 +7,14 @@ import * as React from 'react'
 import dynamic from 'next/dynamic'
 
 import { CountryLayer } from './src/CountryLayer'
+import { SiteLayer } from './src/SiteLayer/SiteLayer'
 import { CommentLayer } from './src/CommentLayer'
 import { SensorLayers } from './src/SensorsLayer'
 import { FileLayers } from './src/FileLayer'
 import { OpenDataLayers } from './src/OpenDataLayer/src'
 import { BuildingLayer } from './src/BuildingLayers'
 import { useBimContext } from '../../../../../store'
+import type { Organization } from '../../../../../types/dbTypes'
 
 const LazyBimLayer = dynamic(
   () => import('./src/BimLayer').then(m => ({ default: m.BimLayer })),
@@ -25,14 +27,15 @@ function BimLayerGate() {
   return <LazyBimLayer />
 }
 
-export const MapLayers = () => {
+export const MapLayers = ({ minioBaseUrl, organization, maptilerKey }: { minioBaseUrl?: string; organization?: Organization; maptilerKey?: string }) => {
   return (
     <>
-      <CountryLayer />
+      <SiteLayer />
+      <CountryLayer organization={organization} maptilerKey={maptilerKey} />
       <OpenDataLayers />
       <BuildingLayer />
       <CommentLayer />
-      <SensorLayers />
+      <SensorLayers minioBaseUrl={minioBaseUrl} />
       <FileLayers />
       <BimLayerGate />
     </>

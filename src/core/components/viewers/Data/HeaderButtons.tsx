@@ -19,8 +19,8 @@ import type { CompareItem } from '../../../store'
 
 // Shadcn Components
 import { Button } from '../../../components/ui/Button'
-import { createSitesDataset } from '../map/src/MapLayers/src/SiteLayer'
-import { fitBuildingsBounds, fitSitesBounds } from '../map/utils/fitBuildingsBounds'
+import { fitBuildingsBounds } from '../map/utils/fitBuildingsBounds'
+import { useShowSitesOnMap } from '../map/src/MapLayers/src/SiteLayer/useShowSitesOnMap'
 import AddBuilding from './buildingDetails/AddBuilding'
 // File Adder
 import DatatableFileAdder from './files/DatatableFileAdder'
@@ -45,6 +45,8 @@ type HeaderButtonsProps = {
   setNewItemName: React.Dispatch<React.SetStateAction<string>>
   filteredData?: Array<Building | Site>
   users?: User[]
+  geocodeEarthApiKey?: string
+  geocoderUrl?: string
 }
 
 export default function HeaderButtons({
@@ -58,6 +60,8 @@ export default function HeaderButtons({
   setNewItemName,
   filteredData,
   users,
+  geocodeEarthApiKey,
+  geocoderUrl,
 }: HeaderButtonsProps) {
   // Translations
   const t = useTranslations('HeaderButtons')
@@ -75,6 +79,7 @@ export default function HeaderButtons({
   const [addUserOpen, setAddUserOpen] = React.useState(false)
 
   const { map } = mapState.map
+  const showSitesOnMap = useShowSitesOnMap()
   const firstBuilding = compareItems[0]
 
   const coordinates = firstBuilding
@@ -142,26 +147,14 @@ export default function HeaderButtons({
     }
 
     else if (currentViewer === 'sites') {
-      // Filter sites with valid coordinates
-      const validSites = filteredData.filter(
-        (item): item is Site =>
-          (item as Site).siteLongitude != null && (item as Site).siteLatitude != null
-      )
+      const validSites = (filteredData ?? []).filter((item): item is Site => !!(item as Site)?.id)
 
       if (validSites.length === 0)
         return
 
-      const name = 'Database Sites'
-
-      const dataset: Dataset = createSitesDataset(validSites, name)
-
-      // Add buildings as a dataset to the map state
-      datasetDispatch({
-        type: 'ADD_DATASET_TO_MAP',
-        payload: { dataset },
-      })
-
-      fitSitesBounds(validSites, map)
+      // Render each site's saved GeoJSON boundary (not just a point marker).
+      // Viewer was already switched to the map above.
+      await showSitesOnMap(validSites, { switchViewer: false })
     }
 
     else if (currentViewer === 'infrastructure') {
@@ -227,6 +220,8 @@ export default function HeaderButtons({
                     setNewBuildingFields={setNewBuildingFields}
                     open={addBuildingOpen}
                     onOpenChange={setAddBuildingOpen}
+                    geocodeEarthApiKey={geocodeEarthApiKey}
+                    geocoderUrl={geocoderUrl}
                   />
                   <BuildingMoreOptions buildings={filteredData as Building[]} variant="outline" />
                 </>

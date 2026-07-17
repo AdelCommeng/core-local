@@ -26,13 +26,14 @@ import type { Sensor } from '../../../types/dbTypes';
 import { useSensorTypes } from '../../../hooks/sensorTypes/sensorTypes'
 import * as LR from 'lucide-react'
 import { stringToColour } from '../../viewers/map/utils/stringToColour'
+import { resolveLucideIcon } from './sensorUtils'
 
 type SensorAction = 'view' | 'edit' | 'delete'
 
 /** Stable key used in state for sensors with no tags — locale-independent */
 export const UNTAGGED_TAG = '__untagged__'
 
-export function SensorsSection() {
+export function SensorsSection({ minioBaseUrl }: { minioBaseUrl?: string }) {
   // Translation
   const t = useTranslations('SensorsSection')
 
@@ -232,7 +233,7 @@ export function SensorsSection() {
           const viewerTypes = visibleSensorTypes?.[currentViewer]
           const isTypeVisible = viewerTypes?.length > 0 && viewerTypes.includes(typeId)
 
-          const sensorIcon = LR[type?.icon] || LR.Radio
+          const sensorIcon = resolveLucideIcon(type?.icon)
 
           return (
             <CollapsibleSection
@@ -257,6 +258,7 @@ export function SensorsSection() {
                     sensorType={type}
                     onAction={handleSensorAction}
                     isVisible={isTypeVisible}
+                    minioBaseUrl={minioBaseUrl}
                     onMouseEnter={() => menusDispatch({ type: 'SET_CURRENT_SENSOR_ID', payload: { currentSensorId: sensor.id } })}
                     onMouseLeave={() => menusDispatch({ type: 'SET_CURRENT_SENSOR_ID', payload: { currentSensorId: null } })}
                   />
@@ -292,6 +294,7 @@ export function SensorsSection() {
                     sensorType={type}
                     onAction={handleSensorAction}
                     isVisible={isTagVisible}
+                    minioBaseUrl={minioBaseUrl}
                     onMouseEnter={() => menusDispatch({ type: 'SET_CURRENT_SENSOR_ID', payload: { currentSensorId: sensor.id } })}
                     onMouseLeave={() => menusDispatch({ type: 'SET_CURRENT_SENSOR_ID', payload: { currentSensorId: null } })}
                   />

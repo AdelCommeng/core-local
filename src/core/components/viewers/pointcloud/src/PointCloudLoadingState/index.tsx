@@ -10,6 +10,7 @@ import { Input } from '../../../../ui/Input'
 import { LoadingSpinner } from '../../../../ui/LoadingSpinner'
 import * as LR from 'lucide-react'
 import { BuildingsContext, usePermissions } from '../../../../../store'
+// import { useAppConfigContext } from '../../../../../store/AppConfig/context'
 import { useTranslations } from 'next-intl'
 import { useFilesByBuildingId } from '../../../../../hooks/files/files'
 import type { DbFile } from '../../../../../types/dbTypes'
@@ -17,8 +18,6 @@ import { cn } from '../../../../../utils/utils'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useBuilding, useBuildings } from '../../../../../hooks/buildings/buildings'
 import { SquareArrowOutUpRight } from 'lucide-react'
-
-const API_BASE = process.env.NEXT_PUBLIC_POINTCLOUD_API_URL ?? 'http://localhost:5101'
 
 type CreatePointCloudResponse = {
   pointCloud: {
@@ -32,8 +31,9 @@ type CreatePointCloudResponse = {
 
 export type pointCloudViewerState = 'opening' | 'loading' | 'ready' | 'error' | 'noPointCloudFiles' | 'noBuilding'
 
-export function PointCloudLoadingState() {
+export function PointCloudLoadingState({ pointcloudApiUrl }: { pointcloudApiUrl?: string }) {
   const t = useTranslations('PointCloudLoadingState')
+  const API_BASE = pointcloudApiUrl ?? 'http://localhost:5101'
   // Permissions
   const { ability } = usePermissions()
 
@@ -164,11 +164,11 @@ export function PointCloudLoadingState() {
   }
 
   // Create point cloud entry
-  async function createPointCloud(name: string): Promise<CreatePointCloudResponse> {
-    const res = await fetch(`${API_BASE}/point-cloud`, {
+  async function createPointCloud(name: string, buildingId: number): Promise<CreatePointCloudResponse> {
+    const res = await fetch('/api/point-cloud', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, buildingId }),
     })
 
     if (!res.ok) {
@@ -230,7 +230,7 @@ export function PointCloudLoadingState() {
 
     try {
       console.log('Creating point cloud entry...')
-      const { pointCloud, upload } = await createPointCloud(fileName)
+      const { pointCloud, upload } = await createPointCloud(fileName, building.id)
       console.log('Point cloud created:', pointCloud.id)
 
       console.log('Uploading file...')
@@ -239,7 +239,18 @@ export function PointCloudLoadingState() {
       })
       console.log('Upload complete!')
 
-      // Trigger a refresh of the files - the state will update automatically
+      console.log('Starting conversion...')
+      const convertRes = await fetch(
+        `${API_BASE}/point-cloud/${encodeURIComponent(String(pointCloud.id))}/convert-to-potree`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ options: { sampling_method: 'poisson' } }),
+        }
+      )
+      if (!convertRes.ok) throw new Error('Failed to start conversion')
+      console.log('Conversion started!')
+
       window.location.reload()
     }
     catch (error) {

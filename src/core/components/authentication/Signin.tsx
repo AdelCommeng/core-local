@@ -12,19 +12,46 @@ import { Button, GoogleIcon, Input, LoadingSpinner } from '../ui'
 import { AuthPage, useAuthTheme } from './AuthPage'
 import { useParams, useSearchParams } from 'next/navigation'
 import ReCAPTCHA from 'react-google-recaptcha'
+import { PasswordError } from '../authentication/PasswordError'
+import { AuthHeader } from './SignInAuthHeader'
+//import { useAppConfigContext } from '../../store/AppConfig/context'
 
-function SignInContent() {
-  const [step, setStep] = React.useState<'login' | 'mfa'>('login')
+interface SignInContentProps {
+  recaptchaSiteKey?: string
+}
+
+function SignInContent({ recaptchaSiteKey, }) {
+  const [step, setStep] = React.useState<
+  'login'
+  | 'mfa'
+  | 'forgotPassword'
+  | 'forgotPasswordSent'
+  | 'changePassword'
+>('login')
 
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
   const [code, setCode] = React.useState('')
 
+  const recaptchaRef = React.useRef<ReCAPTCHA>(null)
   const [captchaStatus, setCaptchaStatus] = React.useState(false)
   const [captchaToken, setCaptchaToken] = React.useState('')
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
+  const [confirmPassword, setConfirmPassword] = React.useState('')
+
+  const [showNewPassword, setShowNewPassword] = React.useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false)
+  const [currentPassword, setCurrentPassword] = React.useState('')
+  const [newPassword, setNewPassword] = React.useState('')
+
+  const [newPasswordErrors, setNewPasswordErrors] = React.useState<string[]>([])
+  const [passwordErrors, setPasswordErrors] = React.useState<string[]>([])
+  const [confirmPasswordError, setConfirmPasswordError] = React.useState('')
+  const [hasAttemptedSave, setHasAttemptedSave] = React.useState(false)
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = React.useState(false)
+  
 
   const searchParams = useSearchParams()
   const params = useParams()
@@ -41,16 +68,24 @@ function SignInContent() {
 
   const t = useTranslations('Signin')
   const tMfa = useTranslations('MFA')
+  const tforgotPassword = useTranslations('forgotPassword')
+  const tresetPassword = useTranslations('resetPassword')
   const authTheme = useAuthTheme()
 
-  const reCaptchaSiteKey = `${process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY}`
+  
+
+  const resetCaptcha = () => {
+    recaptchaRef.current?.reset()
+    setCaptchaToken('')
+    setCaptchaStatus(false)
+  }
 
   const onReCaptchaSuccess = (token) => {
     setCaptchaToken(token)
     setCaptchaStatus(true)
   }
 
-  // Initial LOGIN
+  // Initial LOGIN with Credentials(Username and Password)
   const handleSubmit = async (e) => {
     e.preventDefault()
     setGoogleError(null)
@@ -77,19 +112,21 @@ function SignInContent() {
         else if (result.code === 'whitelist_invalid_credentials') {
           setError('Invalid email or password')
           setIsLoading(false)
+          resetCaptcha()
           return
         }
 
         else if (!captchaStatus) {
-
           setError('Captcha Verification Failed.')
           setIsLoading(false)
+          resetCaptcha()
           return
         }
 
         else if (result.code === 'invalid_credentials') {
           setError('Invalid email or password')
           setIsLoading(false)
+          resetCaptcha()
           return
         }
         //MFA TRIGGER
@@ -102,6 +139,7 @@ function SignInContent() {
         else { //result.code === 'expired_recaptcha_token
           setError('Captcha Verification Expired. Please try again later.')
           setIsLoading(false)
+          resetCaptcha()
           return
         }
       }
@@ -150,30 +188,219 @@ function SignInContent() {
     }
   }
 
+  // Password Policy for New Password used for Reset Password flow
+  const validatePassword = (password: string): string[] => {
+    const errors: string[] = []
+
+    // Regex Pattern - At least:
+    // 1 lowercase:(?=.*[a-z])
+    // 1 uppercase: (?=.*[A-Z])
+    // 1 digit: (?=.*\d)
+    // 1 special char: (?=.*[@$!%*?&_])
+    //min 12 characters, max 65: {12,65}
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d\s])[^\s]{12,65}$/;
+      if (!passwordRegex.test(password)) {
+        errors.push(t('weakPassword'));
+      }
+    //   if (password.toLowerCase().includes(username.toLowerCase())) {
+    //      //errors.push(t('containsUsername'));
+    //      errors.push(t('weakPassword'));
+
+    //  }      
+
+    return errors
+  }
+
+    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setNewPassword(value)
+    setNewPasswordErrors(validatePassword(value))
+    if (confirmPassword) {
+      setConfirmPasswordError(value === confirmPassword ? '' : tforgotPassword('noMatch'))
+    }
+  }
+  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    setConfirmPassword(value)
+    setConfirmPasswordError(value === newPassword ? '' : tforgotPassword('noMatch'))
+  } 
+
+  //Forgot Password Flow: 1. User Clicks Reset Password > 2. OTP is emailed(forgotpassword API)
+  //  > 3. OTP is verified(verifyotp API) > 4. User chooses a new password(resetpassword API)
+
+  //2. Initiate ForgotPasword flow - OTP is emailed
+  const handleForgotPassword = async () => {
+  setIsLoading(true)
+  setError('')
+
+  try {
+    const res = await fetch('/api/forgotpassword', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email
+      }),
+    })
+
+    if (!res.ok) {
+      setError('Unable to send password reset email.')
+      setIsLoading(false)
+      return
+    }
+
+    //Redirect to Verify OTP flow to enter OTP that has been emailed 
+    setStep('forgotPasswordSent')
+    setIsLoading(false)
+
+  } catch {
+    setError('Unable to process')
+    setIsLoading(false)
+  }
+}
+
+// 3. Handle Change Password - OTP is getting verified
+  // VERIFY OTP for MFA
+  const handleVerifyOTPForPasswordChange = async () => {
+    //NEW------------------------------------------------------------------
+  setIsLoading(true)
+  setError('')
+
+  try {
+
+    const res = await fetch('/api/verifyotp', {
+
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+      },
+
+      body: JSON.stringify({
+        email,
+        code,
+      }),
+    })
+
+    if (!res.ok) {
+
+      //setError('Invalid verification code.')
+      toast.error('Invalid verification code.')
+      setIsLoading(false)
+      return
+
+    }
+    toast.success("SUCCESS")
+    //Redirect User to enter New Password in Change Password page
+    setStep('changePassword')
+
+  } catch {
+
+    setError('Unable to verify code.')
+
+  } finally {
+
+    setIsLoading(false)
+
+  }
+
+  }
+
+  //Final Step: Reset Password 
+const handleResetPassword = async () => {
+
+  setHasAttemptedSubmit(true)
+
+  const errors = validatePassword(newPassword)
+
+  setPasswordErrors(errors)
+  
+
+  if (newPassword !== confirmPassword) {
+
+    toast.error(tforgotPassword('noMatch'))
+    return
+
+  }
+
+  if (errors.length > 0){
+    toast.error(tforgotPassword('passwordPolicyError'))
+    return
+  }
+  setIsLoading(true)
+  setError('')
+
+
+  try {
+
+    const res = await fetch('/api/resetpassword', {
+
+      method: 'POST',
+
+      headers: {
+        'Content-Type': 'application/json',
+      },
+
+      body: JSON.stringify({
+
+        email,
+        code,
+        newPassword,
+
+      }),
+    })
+
+    if (!res.ok) {
+
+      toast.error('Session Expired: Unable to reset password.')
+      setStep('login')
+      return
+
+    }
+
+    toast.success('Password successfully changed.')
+
+    setNewPassword('')
+    setConfirmPassword('')
+    setCode('')
+    setStep('login')
+
+  } finally {
+
+    setIsLoading(false)
+
+  }
+
+
+}
   return (
     <>
       <Toaster richColors position="top-right" />
-      {/* Header */}
-      <div className="space-y-2 text-left">
+
+      {/* LOGIN FORM */}
+      {step === 'login' && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+           {/* LOGIN Header */}
+          <div className="space-y-2 text-left">
+
         <h1 className="font-display font-bold" style={{
           fontSize: '1.75rem',
           lineHeight: '1.1',
           letterSpacing: '-0.02em',
           color: 'var(--hp-on-surface)',
         }}>
-          {step === 'login' ? t('title') : tMfa('title')}
+         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
+         {t('title')}
         </h1>
 
         <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
-          {step === 'login'
+         {/* {step === 'login'
             ? t('message')
-            : tMfa('subtitle', { email })}
+            : tMfa('subtitle', { email })} */}
+          {t('message')}
         </p>
-      </div>
-
-      {/* LOGIN FORM */}
-      {step === 'login' && (
-        <form onSubmit={handleSubmit} className="space-y-4">
+      </div> 
 
           <Input
             type="email"
@@ -229,24 +456,43 @@ function SignInContent() {
             </button>}
 
           </div>
+          {/* Reset Password Link */}
+          <button
+          type="button"
+          onClick={() => {
+          setError('')
+          setStep('forgotPassword')
+          }}
+          className="text-sm underline underline-offset-4 hover:opacity-80"
+          style={{ color: 'var(--hp-primary)' }}
+          >
+          Reset your password
+          </button>
 
-          {/*⚠️⚠️⚠️⚠️ DISABLED FOR NOW - Password Reset link, will implement in the future when we have the flow ready */}
-          {/* Reset Password link */}
-          {/* <div className="flex justify-start">
-            <a
-              href={`/${orgName}/auth/reset-password`}
-              className="text-sm underline underline-offset-4 hover:opacity-80"
-              style={{ color: 'var(--hp-primary)' }}
-            >
-              Reset your password
-            </a>
-          </div> */}
         </form>
       )}
 
       {/* MFA FORM */}
       {step === 'mfa' && (
         <div className="space-y-4">
+                <div className="space-y-2 text-left">
+        <h1 className="font-display font-bold" style={{
+          fontSize: '1.75rem',
+          lineHeight: '1.1',
+          letterSpacing: '-0.02em',
+          color: 'var(--hp-on-surface)',
+        }}>
+         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
+         {tMfa('title')}
+        </h1>
+
+        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
+         {/* {step === 'login'
+            ? t('message')
+            : tMfa('subtitle', { email })} */}
+          {tMfa('subtitle',{email})}
+        </p>
+      </div>
 
           <Input
             placeholder={tMfa('placeholder')}
@@ -270,14 +516,203 @@ function SignInContent() {
           </Button>
         </div>
       )}
+      {/*Forgot Password step: Send OTP for Reset */}
+      {step === 'forgotPassword' && (
+  <div className="space-y-4">
+        <div className="space-y-2 text-left">
+        <h1 className="font-display font-bold" style={{
+          fontSize: '1.75rem',
+          lineHeight: '1.1',
+          letterSpacing: '-0.02em',
+          color: 'var(--hp-on-surface)',
+        }}>
+         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
+         {tresetPassword('title')}
+        </h1>
 
+        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
+         {/* {step === 'login'
+            ? t('message')
+            : tMfa('subtitle', { email })} */}
+          {tresetPassword('subtitle')}
+        </p>
+      </div> 
+
+    <Input
+      type="email"
+      placeholder="Enter your email address"
+      value={email}
+      onChange={(e) => setEmail(e.target.value)}
+      disabled={isLoading}
+    />
+
+    {error && (
+      <div className="auth-pw-error">
+        {error}
+      </div>
+    )}
+
+    <Button
+      onClick={handleForgotPassword}
+      disabled={isLoading || !email}
+      className="w-full"
+    >
+      {isLoading
+        ? <LoadingSpinner />
+        : 'Send Reset Link'}
+    </Button>
+
+    <Button
+      variant="outline"
+      onClick={() => setStep('login')}
+      className="w-full"
+    >
+      <LR.ArrowLeft size={16} />
+      Back to Login
+    </Button>
+
+  </div>
+)}
+{/* Verify OTP for Password Change */}
+{step === 'forgotPasswordSent' && (
+  <div className="space-y-4">
+                        <div className="space-y-2 text-left">
+        <h1 className="font-display font-bold" style={{
+          fontSize: '1.75rem',
+          lineHeight: '1.1',
+          letterSpacing: '-0.02em',
+          color: 'var(--hp-on-surface)',
+        }}>
+         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
+         {tresetPassword('title')}
+        </h1>
+
+        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
+         {/* {step === 'login'
+            ? t('message')
+            : tMfa('subtitle', { email })} */}
+          {tresetPassword('ifAnAccountExists',{email})}
+        </p>
+      </div>
+              <Input
+            placeholder={tMfa('placeholder')}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            disabled={isLoading}
+          />
+{error && (
+  <div className="auth-pw-error">
+    {error}
+  </div>
+)}
+          <Button onClick={handleVerifyOTPForPasswordChange} disabled={isLoading} className="w-full">
+            {isLoading ? <LoadingSpinner /> : tMfa('verify')}
+          </Button>
+
+    <Button
+      onClick={() => setStep('login')}
+      className="w-full"
+    >
+      Back to Login
+    </Button>
+
+  </div>
+)}
+
+{/*Change PAssword */}
+{step === 'changePassword' && (
+
+<div className="space-y-4">
+                          <div className="space-y-2 text-left">
+        <h1 className="font-display font-bold" style={{
+          fontSize: '1.75rem',
+          lineHeight: '1.1',
+          letterSpacing: '-0.02em',
+          color: 'var(--hp-on-surface)',
+        }}>
+         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
+         {tresetPassword('newPasswordTitle')}
+        </h1>
+
+        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
+         {/* {step === 'login'
+            ? t('message')
+            : tMfa('subtitle', { email })} */}
+          {tresetPassword('newPasswordMessage')}<br /> <br />
+          {tresetPassword('lowercase')} <br />
+          {tresetPassword('lowercase')} <br />
+          {tresetPassword('uppercase')} <br />
+          {tresetPassword('digit')} <br />
+          {tresetPassword('specialchar')} <br />
+          {tresetPassword('minmax')} <br />
+        </p>
+
+      </div>
+  
+                                     
+  <Input
+    type={showNewPassword ? 'text' : 'password'}
+    placeholder="New Password"
+    className={`w-full ${hasAttemptedSave && newPasswordErrors.length > 0 ? 'border-destructive' : ''}`}
+    value={newPassword}
+    onChange={handlePasswordChange}
+  />
+
+                    {hasAttemptedSave && newPasswordErrors.map((error, idx) => (
+                      <PasswordError key={idx} message={error} />
+                    ))}
+
+
+  <Input
+    type={showConfirmPassword ? 'text' : 'password'}
+    placeholder="Confirm Password"
+    value={confirmPassword}
+    onChange={handleConfirmPasswordChange}
+  />
+
+                    
+                    {hasAttemptedSave && confirmPasswordError && (
+                      <PasswordError message={confirmPasswordError} />
+                    )}
+
+  {error && (
+    <div className="auth-pw-error">
+      {error}
+    </div>
+  )}
+
+  <Button
+    onClick={handleResetPassword}
+    disabled={isLoading}
+    className="w-full"
+  >
+    {isLoading
+      ? <LoadingSpinner />
+      : 'Change Password'}
+  </Button>
+
+
+  <Button
+    variant="outline"
+    onClick={() => setStep('login')}
+    className="w-full"
+  >
+    <LR.ArrowLeft size={16} />
+    Back to Login
+  </Button>
+
+</div>
+
+)}
       {/* CAPTCHA only on Credentials(Username and Password) Provider login */}
+           
       {step === 'login' && (
         <div className="auth-captcha-wrapper">
           <ReCAPTCHA
+            ref={recaptchaRef}
             key={`recaptcha-${authTheme}`}
-            sitekey={reCaptchaSiteKey}
-            onChange={onReCaptchaSuccess}
+            sitekey={recaptchaSiteKey ?? ''}
+            onChange={(token) => onReCaptchaSuccess(token)}
             theme={authTheme}
           />
         </div>
@@ -286,10 +721,15 @@ function SignInContent() {
   )
 }
 
-export function SignIn() {
+interface SignInProps {
+  recaptchaSiteKey?: string
+  minioBaseUrl?: string
+}
+
+export function SignIn({ recaptchaSiteKey,minioBaseUrl, }: SignInProps) {
   return (
-    <AuthPage>
-      <SignInContent />
+    <AuthPage minioBaseUrl={minioBaseUrl}>
+      <SignInContent recaptchaSiteKey={recaptchaSiteKey} />
     </AuthPage>
   )
 }

@@ -19,7 +19,7 @@ import { useSession } from 'next-auth/react'
 import { SensorChart } from './SensorChart'
 import { SensorTagsSection } from './SensorTagsSection'
 import type { ChartConfig } from '../chart'
-
+import { resolveLucideIcon } from './sensorUtils'
 type SensorAction = 'view' | 'edit' | 'delete' | 'reply'
 
 interface CollapsibleSensorItemProps {
@@ -30,6 +30,7 @@ interface CollapsibleSensorItemProps {
   isVisible?: boolean
   onMouseEnter?: () => void
   onMouseLeave?: () => void
+  minioBaseUrl?: string
 }
 
 export function CollapsibleSensorItem({
@@ -39,7 +40,8 @@ export function CollapsibleSensorItem({
   depth = 0,
   isVisible = true,
   onMouseEnter,
-  onMouseLeave
+  onMouseLeave,
+  minioBaseUrl
 }: CollapsibleSensorItemProps) {
   const t = useTranslations('SensorsSection')
   const [isExpanded, setIsExpanded] = React.useState(false)
@@ -47,12 +49,15 @@ export function CollapsibleSensorItem({
   const [isLoadingData, setIsLoadingData] = React.useState(false)
   const prevVisibleRef = React.useRef(isVisible)
 
-  const dataPath = `${process.env.NEXT_PUBLIC_MINIO_BUCKET_URL}/sensors/${sensor.url}`
+  //const { state: { runtimeConfig: { minioUrl } } } = useAppConfigContext()
 
-  const typeIcon  = sensorType?.icon || 'Radio'
-  const typeName = sensorType?.name.replace(/_/g, ' ') ?? 'Unknown'    
+  //const dataPath = `${minioUrl ?? ''}/sensors/${sensor.url}`
+  const dataPath = minioBaseUrl
+  ? `${minioBaseUrl}/sensors/${sensor.url}`
+  : ''
+  const typeName = sensorType?.name.replace(/_/g, ' ') ?? 'Unknown'
 
-  const SensorIcon = LR[typeIcon] || LR.Radio
+  const SensorIcon = resolveLucideIcon(sensorType?.icon)
 
   // Auto-collapse when visibility turns off
   React.useEffect(() => {

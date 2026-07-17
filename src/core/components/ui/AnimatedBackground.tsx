@@ -8,9 +8,10 @@ import { useMotionValue, useSpring } from 'framer-motion'
 
 interface Props {
   theme?: 'light' | 'dark'
+  assetsUrl?: string
 }
 
-export default function AnimatedBackground({ theme }: Props = {}) {
+export default function AnimatedBackground({ theme, assetsUrl }: Props = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
@@ -226,13 +227,11 @@ export default function AnimatedBackground({ theme }: Props = {}) {
     }
   }, [smoothMouseX, smoothMouseY, isDark])
 
-  const assetsUrl = process.env.NEXT_PUBLIC_MINIO_BUCKET_URL || ''
-
   return (
     <>
       <div className="absolute top-0 right-0 inset-0 z-10 w-screen">
         <img
-          src={`${assetsUrl}/cdt-homepage/home-bg.png`}
+          src={`${assetsUrl ?? ''}/cdt-homepage/home-bg.png`}
           alt="Background"
           className="object-cover opacity-10 w-screen"
           style={{ filter: isDark ? 'invert(0)' : 'invert(1)' }}

@@ -8,8 +8,7 @@ import * as React from 'react'
 // Dependencies
 import { AppConfigContext, MapContext, useMenusContext } from '../store'
 import { ViewerNames } from '../types/'
-import { BugReportDialog } from "../components/support/BugReportDialog";
-import { FeatureRequestDialog } from "../components/support/FeatureRequestDialog";
+
 // Shadcn Components
 import {
   SidebarContent,
@@ -67,16 +66,17 @@ export const handleChangeViewer = (
 interface AppSidebarProps {
   organization: Organization
   countrySubdivisionsData?: Record<string, string>;
+  minioBaseUrl?: string
 }
 
-export function AppSidebarContent({ organization, countrySubdivisionsData }: AppSidebarProps) {
+export function AppSidebarContent({ organization, countrySubdivisionsData, minioBaseUrl, }: AppSidebarProps) {
   // Translations
   const t = useTranslations('AppSidebar')
 
   const { dispatch: appConfigDispatch } = React.useContext(AppConfigContext)
   const { dispatch: mapDispatch } = React.useContext(MapContext)
 
-  
+
 
   React.useEffect(() => {
     appConfigDispatch({
@@ -84,7 +84,7 @@ export function AppSidebarContent({ organization, countrySubdivisionsData }: App
       payload: { organization },
     })
   }, [organization, appConfigDispatch])
-  
+
   React.useEffect(() => {
     if (countrySubdivisionsData) {
       mapDispatch({
@@ -106,10 +106,10 @@ export function AppSidebarContent({ organization, countrySubdivisionsData }: App
   }
 
   const logoKey = organization?.logoKey
-  const minioBaseUrl = process.env.NEXT_PUBLIC_MINIO_BUCKET_URL
   const logoUrl = minioBaseUrl && logoKey
     ? `${minioBaseUrl}/org-logos/${logoKey}`
     : '/images/cdt-logo-stroke.svg'
+
 
   const { dispatch: menusDispatch, state: menusState } = useMenusContext()
   const { setSelectedItem, setSelectedSite, setSelectedFile, setView } = useMenusContext()
@@ -121,7 +121,10 @@ export function AppSidebarContent({ organization, countrySubdivisionsData }: App
     [userRole]
   )
 
-  const { sidebarState, setOpenInfo, isMobile, openMobile } = useSidebar()
+  const {
+    sidebarState, setOpenInfo, isMobile, openMobile, setOpenMobile,
+    setBugReportOpen, setFeatureRequestOpen,
+  } = useSidebar()
 
   const changeViewer = (viewer: ViewerNames) => {
     handleChangeViewer(viewer, setSelectedItem, setSelectedSite, setSelectedFile, setView, menusDispatch)
@@ -251,12 +254,25 @@ export function AppSidebarContent({ organization, countrySubdivisionsData }: App
   }, [normalizedUserRoles])
 
   const visibleDatasetItems = datasetItems
-  .filter(item => !appContent || appContent.includes(item.id as ViewerNames))
-  .filter(canRenderItem)
+    .filter(item => !appContent || appContent.includes(item.id as ViewerNames))
+    .filter(canRenderItem)
 
-  const [bugOpen, setBugOpen] = React.useState(false);
-  const [featureOpen, setFeatureOpen] = React.useState(false);
-  
+  // BugReportDialog/FeatureRequestDialog are rendered by AppSidebar, outside
+  // the mobile Sheet's subtree — see the SidebarContext fields for why: this
+  // component (AppSidebarContent) is itself the Sheet's children on mobile,
+  // so a dialog rendered here would get unmounted along with the Sheet
+  // shortly after closing it, right after it opens.
+  // On mobile, also close the sidebar Sheet first so it doesn't end up behind
+  // the dialog (e.g. visible in a "Capture Screenshot").
+  const openBugDialog = () => {
+    if (isMobile) setOpenMobile(false)
+    setBugReportOpen(true)
+  }
+  const openFeatureDialog = () => {
+    if (isMobile) setOpenMobile(false)
+    setFeatureRequestOpen(true)
+  }
+
   return (
     <>
       <SidebarContent className='overflow-hidden'>
@@ -323,9 +339,8 @@ export function AppSidebarContent({ organization, countrySubdivisionsData }: App
                             >
                               <item.icon className={buildIconClass(active)} />
                               <span
-                                className={`${isCollapsed ? 'hidden' : 'inline'} ${
-                                  active ? 'font-bold text-primary' : ''
-                                }`}
+                                className={`${isCollapsed ? 'hidden' : 'inline'} ${active ? 'font-bold text-primary' : ''
+                                  }`}
                               >
                                 {item.title}
                               </span>
@@ -384,45 +399,35 @@ export function AppSidebarContent({ organization, countrySubdivisionsData }: App
         <SidebarGroup>
           <SidebarGroupLabel>{t('service')}</SidebarGroupLabel>
           <SidebarMenu>
-          {serviceItems.map((item, index) => (
-            <SidebarMenuItem key={index}>
-              {item.id === "support" ? (
-                <SupportMenu
-                  isCollapsed={isCollapsed}
-                  item={item}
-                  onOpenBug={() => setBugOpen(true)}
-                  onOpenFeature={() => setFeatureOpen(true)}
-                />
-              ) : (
-                <SidebarMenuButton asChild>
-                  <a
-                    href={item.url}
-                    className={`text-xs flex items-center gap-2 w-full ${
-                      isCollapsed ? "justify-center p-2" : "justify-start p-2"
-                    }`}
-                    title={item.tooltip}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span className={isCollapsed ? "hidden" : "inline"}>
-                      {item.title}
-                    </span>
-                  </a>
-                </SidebarMenuButton>
-              )}
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
+            {serviceItems.map((item, index) => (
+              <SidebarMenuItem key={index}>
+                {item.id === "support" ? (
+                  <SupportMenu
+                    isCollapsed={isCollapsed}
+                    item={item}
+                    onOpenBug={openBugDialog}
+                    onOpenFeature={openFeatureDialog}
+                  />
+                ) : (
+                  <SidebarMenuButton asChild>
+                    <a
+                      href={item.url}
+                      className={`text-xs flex items-center gap-2 w-full ${isCollapsed ? "justify-center p-2" : "justify-start p-2"
+                        }`}
+                      title={item.tooltip}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span className={isCollapsed ? "hidden" : "inline"}>
+                        {item.title}
+                      </span>
+                    </a>
+                  </SidebarMenuButton>
+                )}
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
         </SidebarGroup>
       </SidebarFooter>
-        <BugReportDialog
-        open={bugOpen}
-        onOpenChange={setBugOpen}
-      />
-
-      <FeatureRequestDialog
-        open={featureOpen}
-        onOpenChange={setFeatureOpen}
-      />
     </>
   )
 }
