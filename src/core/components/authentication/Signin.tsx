@@ -3,33 +3,34 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025 Collab Digital Twins
 
-import * as LR from 'lucide-react'
-import { useParams, useSearchParams } from 'next/navigation'
+import * as React from 'react'
 import { signIn } from 'next-auth/react'
 import { useTranslations } from 'next-intl'
-import * as React from 'react'
-import ReCAPTCHA from 'react-google-recaptcha'
+import * as LR from 'lucide-react'
 import { toast, Toaster } from 'sonner'
-
-import { PasswordError } from '../authentication/PasswordError'
 import { Button, GoogleIcon, Input, LoadingSpinner } from '../ui'
-
 import { AuthPage, useAuthTheme } from './AuthPage'
-import { AuthHeader } from './SignInAuthHeader'
+import { useParams, useSearchParams } from 'next/navigation'
+import ReCAPTCHA from 'react-google-recaptcha'
 //import { useAppConfigContext } from '../../store/AppConfig/context'
+
+// Where Auth.js sends a guest AFTER they authenticate with Google (the redirectTo).
+// The app's signIn callback provisions the guest (Guest role + guest org) on this path.
+const GUEST_REDIRECT_PATH = '/guest'
+
+// Set ONLY by the "Access as Guest" button right before signIn('google'), and read
+// by the server signIn callback to tell guest intent from a plain "Sign in with
+// Google" click (which must keep the existing link flow and show google_not_linked
+// for unlinked accounts). Must match the name read on the server (auth.ts:
+// GUEST_INTENT_COOKIE). Short-lived; only the guest button ever sets it.
+const GUEST_INTENT_COOKIE = 'cdt_guest_intent'
 
 interface SignInContentProps {
   recaptchaSiteKey?: string
 }
 
 function SignInContent({ recaptchaSiteKey, }) {
-  const [step, setStep] = React.useState<
-  'login'
-  | 'mfa'
-  | 'forgotPassword'
-  | 'forgotPasswordSent'
-  | 'changePassword'
->('login')
+  const [step, setStep] = React.useState<'login' | 'mfa'>('login')
 
   const [email, setEmail] = React.useState('')
   const [password, setPassword] = React.useState('')
@@ -41,19 +42,6 @@ function SignInContent({ recaptchaSiteKey, }) {
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState('')
   const [showPassword, setShowPassword] = React.useState(false)
-  const [confirmPassword, setConfirmPassword] = React.useState('')
-
-  const [showNewPassword, setShowNewPassword] = React.useState(false)
-  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false)
-  const [currentPassword, setCurrentPassword] = React.useState('')
-  const [newPassword, setNewPassword] = React.useState('')
-
-  const [newPasswordErrors, setNewPasswordErrors] = React.useState<string[]>([])
-  const [passwordErrors, setPasswordErrors] = React.useState<string[]>([])
-  const [confirmPasswordError, setConfirmPasswordError] = React.useState('')
-  const [hasAttemptedSave, setHasAttemptedSave] = React.useState(false)
-  const [hasAttemptedSubmit, setHasAttemptedSubmit] = React.useState(false)
-
 
   const searchParams = useSearchParams()
   const params = useParams()
@@ -68,13 +56,18 @@ function SignInContent({ recaptchaSiteKey, }) {
     }
   }, [googleError, orgName])
 
+  // Clear any stale guest-intent marker when the sign-in page loads, so it only
+  // ever reflects a fresh "Access as Guest" click (and never bleeds into a later
+  // plain "Sign in with Google" click).
+  React.useEffect(() => {
+    document.cookie = `${GUEST_INTENT_COOKIE}=; path=/; max-age=0; samesite=lax`
+  }, [])
+
   const t = useTranslations('Signin')
   const tMfa = useTranslations('MFA')
-  const tforgotPassword = useTranslations('forgotPassword')
-  const tresetPassword = useTranslations('resetPassword')
   const authTheme = useAuthTheme()
 
-
+  
 
   const resetCaptcha = () => {
     recaptchaRef.current?.reset()
@@ -87,7 +80,7 @@ function SignInContent({ recaptchaSiteKey, }) {
     setCaptchaStatus(true)
   }
 
-  // Initial LOGIN with Credentials(Username and Password)
+  // Initial LOGIN
   const handleSubmit = async (e) => {
     e.preventDefault()
     setGoogleError(null)
@@ -146,11 +139,10 @@ function SignInContent({ recaptchaSiteKey, }) {
         }
       }
 
-      // Completed Login + MFA - Redirect to the Platform's Organization Dashboard
+      // Completed Login + MFA - Redirect to the Platform's Organization Dashboard 
       window.location.href = `/${orgName}`
 
     } catch (err) {
-      console.error('Sign in failed:', err)
       setError('Unexpected error. Please try again.')
       setIsLoading(false)
     }
@@ -186,225 +178,35 @@ function SignInContent({ recaptchaSiteKey, }) {
       })
 
     } catch (err) {
-      console.error('MFA verification failed:', err)
       toast.error(tMfa('verificationFailed'))
       setIsLoading(false)
     }
   }
 
-  // Password Policy for New Password used for Reset Password flow
-  const validatePassword = (password: string): string[] => {
-    const errors: string[] = []
-
-    // Regex Pattern - At least:
-    // 1 lowercase:(?=.*[a-z])
-    // 1 uppercase: (?=.*[A-Z])
-    // 1 digit: (?=.*\d)
-    // 1 special char: (?=.*[@$!%*?&_])
-    //min 12 characters, max 65: {12,65}
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z\d\s])[^\s]{12,65}$/;
-      if (!passwordRegex.test(password)) {
-        errors.push(t('weakPassword'));
-      }
-    //   if (password.toLowerCase().includes(username.toLowerCase())) {
-    //      //errors.push(t('containsUsername'));
-    //      errors.push(t('weakPassword'));
-
-    //  }
-
-    return errors
-  }
-
-    const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setNewPassword(value)
-    setNewPasswordErrors(validatePassword(value))
-    if (confirmPassword) {
-      setConfirmPasswordError(value === confirmPassword ? '' : tforgotPassword('noMatch'))
-    }
-  }
-  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setConfirmPassword(value)
-    setConfirmPasswordError(value === newPassword ? '' : tforgotPassword('noMatch'))
-  }
-
-  //Forgot Password Flow: 1. User Clicks Reset Password > 2. OTP is emailed(forgotpassword API)
-  //  > 3. OTP is verified(verifyotp API) > 4. User chooses a new password(resetpassword API)
-
-  //2. Initiate ForgotPasword flow - OTP is emailed
-  const handleForgotPassword = async () => {
-  setIsLoading(true)
-  setError('')
-
-  try {
-    const res = await fetch('/api/forgotpassword', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email
-      }),
-    })
-
-    if (!res.ok) {
-      setError('Unable to send password reset email.')
-      setIsLoading(false)
-      return
-    }
-
-    //Redirect to Verify OTP flow to enter OTP that has been emailed
-    setStep('forgotPasswordSent')
-    setIsLoading(false)
-
-  } catch {
-    setError('Unable to process')
-    setIsLoading(false)
-  }
-}
-
-// 3. Handle Change Password - OTP is getting verified
-  // VERIFY OTP for MFA
-  const handleVerifyOTPForPasswordChange = async () => {
-    //NEW------------------------------------------------------------------
-  setIsLoading(true)
-  setError('')
-
-  try {
-
-    const res = await fetch('/api/verifyotp', {
-
-      method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json',
-      },
-
-      body: JSON.stringify({
-        email,
-        code,
-      }),
-    })
-
-    if (!res.ok) {
-
-      //setError('Invalid verification code.')
-      toast.error('Invalid verification code.')
-      setIsLoading(false)
-      return
-
-    }
-    toast.success("SUCCESS")
-    //Redirect User to enter New Password in Change Password page
-    setStep('changePassword')
-
-  } catch {
-
-    setError('Unable to verify code.')
-
-  } finally {
-
-    setIsLoading(false)
-
-  }
-
-  }
-
-  //Final Step: Reset Password
-const handleResetPassword = async () => {
-
-  setHasAttemptedSubmit(true)
-
-  const errors = validatePassword(newPassword)
-
-  setPasswordErrors(errors)
-
-
-  if (newPassword !== confirmPassword) {
-
-    toast.error(tforgotPassword('noMatch'))
-    return
-
-  }
-
-  if (errors.length > 0){
-    toast.error(tforgotPassword('passwordPolicyError'))
-    return
-  }
-  setIsLoading(true)
-  setError('')
-
-
-  try {
-
-    const res = await fetch('/api/resetpassword', {
-
-      method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json',
-      },
-
-      body: JSON.stringify({
-
-        email,
-        code,
-        newPassword,
-
-      }),
-    })
-
-    if (!res.ok) {
-
-      toast.error('Session Expired: Unable to reset password.')
-      setStep('login')
-      return
-
-    }
-
-    toast.success('Password successfully changed.')
-
-    setNewPassword('')
-    setConfirmPassword('')
-    setCode('')
-    setStep('login')
-
-  } finally {
-
-    setIsLoading(false)
-
-  }
-
-
-}
   return (
     <>
       <Toaster richColors position="top-right" />
-
-      {/* LOGIN FORM */}
-      {step === 'login' && (
-        <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-           {/* LOGIN Header */}
-          <div className="space-y-2 text-left">
-
+      {/* Header */}
+      <div className="space-y-2 text-left">
         <h1 className="font-display font-bold" style={{
           fontSize: '1.75rem',
           lineHeight: '1.1',
           letterSpacing: '-0.02em',
           color: 'var(--hp-on-surface)',
         }}>
-         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
-         {t('title')}
+          {step === 'login' ? t('title') : tMfa('title')}
         </h1>
 
         <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
-         {/* {step === 'login'
+          {step === 'login'
             ? t('message')
-            : tMfa('subtitle', { email })} */}
-          {t('message')}
+            : tMfa('subtitle', { email })}
         </p>
       </div>
+
+      {/* LOGIN FORM */}
+      {step === 'login' && (
+        <form onSubmit={handleSubmit} className="space-y-4">
 
           <Input
             type="email"
@@ -451,7 +253,7 @@ const handleResetPassword = async () => {
             {/* Google button */}
             {<button
               type="button"
-              onClick={() => { void signIn('google', { redirectTo: `/${orgName}` }) }}
+              onClick={() => signIn('google', { redirectTo: `/${orgName}` })}
               disabled={isLoading}
               aria-label="Sign in with Google"
               className="auth-google-btn"
@@ -460,43 +262,24 @@ const handleResetPassword = async () => {
             </button>}
 
           </div>
-          {/* Reset Password Link */}
-          <button
-          type="button"
-          onClick={() => {
-          setError('')
-          setStep('forgotPassword')
-          }}
-          className="text-sm underline underline-offset-4 hover:opacity-80"
-          style={{ color: 'var(--hp-primary)' }}
-          >
-          Reset your password
-          </button>
 
+          {/*⚠️⚠️⚠️⚠️ DISABLED FOR NOW - Password Reset link, will implement in the future when we have the flow ready */}
+          {/* Reset Password link */}
+          {/* <div className="flex justify-start">
+            <a
+              href={`/${orgName}/auth/reset-password`}
+              className="text-sm underline underline-offset-4 hover:opacity-80"
+              style={{ color: 'var(--hp-primary)' }}
+            >
+              Reset your password
+            </a>
+          </div> */}
         </form>
       )}
 
       {/* MFA FORM */}
       {step === 'mfa' && (
         <div className="space-y-4">
-                <div className="space-y-2 text-left">
-        <h1 className="font-display font-bold" style={{
-          fontSize: '1.75rem',
-          lineHeight: '1.1',
-          letterSpacing: '-0.02em',
-          color: 'var(--hp-on-surface)',
-        }}>
-         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
-         {tMfa('title')}
-        </h1>
-
-        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
-         {/* {step === 'login'
-            ? t('message')
-            : tMfa('subtitle', { email })} */}
-          {tMfa('subtitle',{email})}
-        </p>
-      </div>
 
           <Input
             placeholder={tMfa('placeholder')}
@@ -505,7 +288,7 @@ const handleResetPassword = async () => {
             disabled={isLoading}
           />
 
-          <Button onClick={() => void handleVerifyOTP()} disabled={isLoading} className="w-full">
+          <Button onClick={handleVerifyOTP} disabled={isLoading} className="w-full">
             {isLoading ? <LoadingSpinner /> : tMfa('verify')}
           </Button>
 
@@ -520,196 +303,9 @@ const handleResetPassword = async () => {
           </Button>
         </div>
       )}
-      {/*Forgot Password step: Send OTP for Reset */}
-      {step === 'forgotPassword' && (
-  <div className="space-y-4">
-        <div className="space-y-2 text-left">
-        <h1 className="font-display font-bold" style={{
-          fontSize: '1.75rem',
-          lineHeight: '1.1',
-          letterSpacing: '-0.02em',
-          color: 'var(--hp-on-surface)',
-        }}>
-         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
-         {tresetPassword('title')}
-        </h1>
 
-        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
-         {/* {step === 'login'
-            ? t('message')
-            : tMfa('subtitle', { email })} */}
-          {tresetPassword('subtitle')}
-        </p>
-      </div>
-
-    <Input
-      type="email"
-      placeholder="Enter your email address"
-      value={email}
-      onChange={(e) => setEmail(e.target.value)}
-      disabled={isLoading}
-    />
-
-    {error && (
-      <div className="auth-pw-error">
-        {error}
-      </div>
-    )}
-
-    <Button
-      onClick={() => void handleForgotPassword()}
-      disabled={isLoading || !email}
-      className="w-full"
-    >
-      {isLoading
-        ? <LoadingSpinner />
-        : 'Send Reset Link'}
-    </Button>
-
-    <Button
-      variant="outline"
-      onClick={() => setStep('login')}
-      className="w-full"
-    >
-      <LR.ArrowLeft size={16} />
-      Back to Login
-    </Button>
-
-  </div>
-)}
-{/* Verify OTP for Password Change */}
-{step === 'forgotPasswordSent' && (
-  <div className="space-y-4">
-                        <div className="space-y-2 text-left">
-        <h1 className="font-display font-bold" style={{
-          fontSize: '1.75rem',
-          lineHeight: '1.1',
-          letterSpacing: '-0.02em',
-          color: 'var(--hp-on-surface)',
-        }}>
-         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
-         {tresetPassword('title')}
-        </h1>
-
-        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
-         {/* {step === 'login'
-            ? t('message')
-            : tMfa('subtitle', { email })} */}
-          {tresetPassword('ifAnAccountExists',{email})}
-        </p>
-      </div>
-              <Input
-            placeholder={tMfa('placeholder')}
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            disabled={isLoading}
-          />
-{error && (
-  <div className="auth-pw-error">
-    {error}
-  </div>
-)}
-          <Button onClick={() => void handleVerifyOTPForPasswordChange()} disabled={isLoading} className="w-full">
-            {isLoading ? <LoadingSpinner /> : tMfa('verify')}
-          </Button>
-
-    <Button
-      onClick={() => setStep('login')}
-      className="w-full"
-    >
-      Back to Login
-    </Button>
-
-  </div>
-)}
-
-{/*Change PAssword */}
-{step === 'changePassword' && (
-
-<div className="space-y-4">
-                          <div className="space-y-2 text-left">
-        <h1 className="font-display font-bold" style={{
-          fontSize: '1.75rem',
-          lineHeight: '1.1',
-          letterSpacing: '-0.02em',
-          color: 'var(--hp-on-surface)',
-        }}>
-         {/*  {step === 'login' ? t('title') : tMfa('title')} */}
-         {tresetPassword('newPasswordTitle')}
-        </h1>
-
-        <p style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.9rem' }}>
-         {/* {step === 'login'
-            ? t('message')
-            : tMfa('subtitle', { email })} */}
-          {tresetPassword('newPasswordMessage')}<br /> <br />
-          {tresetPassword('lowercase')} <br />
-          {tresetPassword('lowercase')} <br />
-          {tresetPassword('uppercase')} <br />
-          {tresetPassword('digit')} <br />
-          {tresetPassword('specialchar')} <br />
-          {tresetPassword('minmax')} <br />
-        </p>
-
-      </div>
-
-
-  <Input
-    type={showNewPassword ? 'text' : 'password'}
-    placeholder="New Password"
-    className={`w-full ${hasAttemptedSave && newPasswordErrors.length > 0 ? 'border-destructive' : ''}`}
-    value={newPassword}
-    onChange={handlePasswordChange}
-  />
-
-                    {hasAttemptedSave && newPasswordErrors.map((error, idx) => (
-                      <PasswordError key={idx} message={error} />
-                    ))}
-
-
-  <Input
-    type={showConfirmPassword ? 'text' : 'password'}
-    placeholder="Confirm Password"
-    value={confirmPassword}
-    onChange={handleConfirmPasswordChange}
-  />
-
-
-                    {hasAttemptedSave && confirmPasswordError && (
-                      <PasswordError message={confirmPasswordError} />
-                    )}
-
-  {error && (
-    <div className="auth-pw-error">
-      {error}
-    </div>
-  )}
-
-  <Button
-    onClick={() => void handleResetPassword()}
-    disabled={isLoading}
-    className="w-full"
-  >
-    {isLoading
-      ? <LoadingSpinner />
-      : 'Change Password'}
-  </Button>
-
-
-  <Button
-    variant="outline"
-    onClick={() => setStep('login')}
-    className="w-full"
-  >
-    <LR.ArrowLeft size={16} />
-    Back to Login
-  </Button>
-
-</div>
-
-)}
       {/* CAPTCHA only on Credentials(Username and Password) Provider login */}
-
+           
       {step === 'login' && (
         <div className="auth-captcha-wrapper">
           <ReCAPTCHA
@@ -719,6 +315,36 @@ const handleResetPassword = async () => {
             onChange={(token) => onReCaptchaSuccess(token)}
             theme={authTheme}
           />
+        </div>
+      )}
+
+      {/* GUEST ACCESS — explore a live demo instance without an account */}
+      {step === 'login' && (
+        <div className="space-y-3">
+          <div className="auth-or-divider">{t('guestDivider')}</div>
+
+          <Button
+            type="button"
+            onClick={() => {
+              // Mark THIS click as guest intent so the server's signIn callback
+              // can tell it apart from the plain "Sign in with Google" icon.
+              document.cookie = `${GUEST_INTENT_COOKIE}=1; path=/; max-age=300; samesite=lax`
+              signIn('google', { redirectTo: GUEST_REDIRECT_PATH })
+            }}
+            disabled={isLoading}
+            aria-label={t('guestAriaLabel')}
+            className="w-full inline-flex items-center justify-center gap-2 auth-btn-guest"
+          >
+            <LR.DoorOpen size={16} />
+            {t('guestButton')}
+          </Button>
+
+          <p
+            className="text-center"
+            style={{ color: 'var(--hp-on-surface-variant)', fontSize: '0.8rem' }}
+          >
+            {t('guestSubtitle')}
+          </p>
         </div>
       )}
     </>
