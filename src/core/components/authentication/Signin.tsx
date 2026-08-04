@@ -23,7 +23,7 @@ const GUEST_REDIRECT_PATH = '/guest'
 // Google" click (which must keep the existing link flow and show google_not_linked
 // for unlinked accounts). Must match the name read on the server (auth.ts:
 // GUEST_INTENT_COOKIE). Short-lived; only the guest button ever sets it.
-const GUEST_INTENT_COOKIE = 'cdt_guest_intent'
+// const GUEST_INTENT_COOKIE = 'cdt_guest_intent'
 
 interface SignInContentProps {
   recaptchaSiteKey?: string
@@ -59,9 +59,9 @@ function SignInContent({ recaptchaSiteKey, }) {
   // Clear any stale guest-intent marker when the sign-in page loads, so it only
   // ever reflects a fresh "Access as Guest" click (and never bleeds into a later
   // plain "Sign in with Google" click).
-  React.useEffect(() => {
-    document.cookie = `${GUEST_INTENT_COOKIE}=; path=/; max-age=0; samesite=lax`
-  }, [])
+  // React.useEffect(() => {
+  //   document.cookie = `${GUEST_INTENT_COOKIE}=; path=/; max-age=0; samesite=lax`
+  // }, [])
 
   const t = useTranslations('Signin')
   const tMfa = useTranslations('MFA')
@@ -328,8 +328,8 @@ function SignInContent({ recaptchaSiteKey, }) {
             onClick={() => {
               // Mark THIS click as guest intent so the server's signIn callback
               // can tell it apart from the plain "Sign in with Google" icon.
-              document.cookie = `${GUEST_INTENT_COOKIE}=1; path=/; max-age=300; samesite=lax`
-              signIn('google', { redirectTo: GUEST_REDIRECT_PATH })
+              // document.cookie = `${GUEST_INTENT_COOKIE}=1; path=/; max-age=300; samesite=lax`
+              signIn('guest', { redirectTo: "/guest",redirect:true })
             }}
             disabled={isLoading}
             aria-label={t('guestAriaLabel')}
