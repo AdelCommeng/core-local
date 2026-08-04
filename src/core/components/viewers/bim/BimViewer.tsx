@@ -9,6 +9,7 @@ import { useTranslations, useLocale } from 'next-intl';
 import * as React from "react";
 import * as THREE from "three";
 
+import { useUndoRedoShortcuts } from "../../../hooks/useUndoRedoShortcuts";
 import { ToolsContext, BimContext, MenusContext } from "../../../store";
 import { SensorLegend } from "../../ui/Sensors/SensorLegend";
 import { useBimCoordinateSystem } from "../useCoordinateSystem";
@@ -16,11 +17,14 @@ import { useBimCoordinateSystem } from "../useCoordinateSystem";
 import { BimLoadingState } from "./src/BimLoadingState";
 import { CurrentCamera } from './src/CurrentCamera';
 import { CurrentWorld } from "./src/CurrentWorld";
+import { ElementAppearance } from "./src/ElementAppearance";
 import { ElevationsTool } from "./src/ElevationsTool";
 import { FloorplanTool } from "./src/FloorplanTool";
 import { Highlighter } from "./src/Highlighter";
+import { IfcClasses } from "./src/IfcClasses";
 import { ViewModeCoordinator } from "./src/lib/ViewModeCoordinator";
 import { PropertiesMenu } from "./src/propertiesMenu";
+import { ClippingPlanes } from "./src/tools/ClippingTool/ClippingPlanes";
 import { ViewportGizmo } from "./src/ViewportGizmo";
 
 
@@ -37,6 +41,53 @@ export function BimViewer() {
 
     const { state: menusState } = React.useContext(MenusContext);
     const { currentViewer } = menusState.menus;
+
+    // Steps appearance overrides (Layers tab) and clipping planes back and
+    // forward. Bound at the viewer rather than in the tab or the toolbar so the
+    // shortcuts survive switching tabs, and so neither the sidebar nor the
+    // toolbar unmounting takes the history with it.
+    //
+    // Each feature keeps its own stack, so one keystroke has to pick a target:
+    // whichever stack changed most recently wins, falling back to the other when
+    // it has nothing left. `onChanged` also fires while a stack is being
+    // replayed, which is what keeps CTRL+Z walking down the stack the user
+    // started on.
+    const lastTouchedHistory = React.useRef<'appearance' | 'clipping'>('appearance');
+
+    React.useEffect(() => {
+        if (!bimComponents) return;
+        const appearance = bimComponents.get(ElementAppearance);
+        const clipping = bimComponents.get(ClippingPlanes);
+        const offAppearance = appearance.history.onChanged(() => {
+            lastTouchedHistory.current = 'appearance';
+        });
+        const offClipping = clipping.history.onChanged(() => {
+            lastTouchedHistory.current = 'clipping';
+        });
+        return () => {
+            offAppearance();
+            offClipping();
+        };
+    }, [bimComponents]);
+
+    const undoRedoTarget = React.useCallback((direction: 'undo' | 'redo') => {
+        if (!bimComponents) return null;
+        const appearance = bimComponents.get(ElementAppearance);
+        const clipping = bimComponents.get(ClippingPlanes);
+        const canRun = (target: typeof appearance | typeof clipping) =>
+            direction === 'undo' ? target.history.canUndo : target.history.canRedo;
+
+        const preferred = lastTouchedHistory.current === 'clipping' ? clipping : appearance;
+        if (canRun(preferred)) return preferred;
+
+        const other = preferred === clipping ? appearance : clipping;
+        return canRun(other) ? other : null;
+    }, [bimComponents]);
+
+    useUndoRedoShortcuts({
+        undo: () => { void undoRedoTarget('undo')?.undo(); },
+        redo: () => { void undoRedoTarget('redo')?.redo(); },
+    });
 
 
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -116,7 +167,14 @@ export function BimViewer() {
             components.get(CurrentWorld).world = world;
             components.get(CurrentCamera).camera = world.camera;
             components.get(Highlighter);
+            // Registered up front so it subscribes to model loads before any
+            // model arrives, rather than when the sidebar first opens.
+            components.get(IfcClasses);
             components.get(ViewModeCoordinator);
+            // Same reason: it has to hear about model loads and about drawing
+            // modes releasing the viewer, both of which need its overrides
+            // repainted, whether or not the Layers tab has ever been opened.
+            components.get(ElementAppearance);
             components.get(FloorplanTool);
             components.get(ElevationsTool);
 
@@ -211,13 +269,20 @@ export function BimViewer() {
             if (resizeObserverRef.current) {
                 resizeObserverRef.current.disconnect();
             }
-            if (componentsRef.current) {
-                componentsRef.current.dispose();
+            // OBC walks components in insertion order and does not guard the loop, so one
+            // component throwing during teardown aborts every disposal after it — including
+            // FragmentsManager, which it deliberately leaves for last. The store must be cleared
+            // either way, or it keeps handing out a dead Components/world to whatever mounts next.
+            try {
+                componentsRef.current?.dispose();
+            } catch (error) {
+                console.error("BIM teardown did not complete cleanly", error);
+            } finally {
                 componentsRef.current = null;
+                bimDispatch({
+                    type: "DISPOSE-BIM"
+                });
             }
-            bimDispatch({
-                type: "DISPOSE-BIM"
-            });
         };
     }, []);
 
@@ -274,7 +339,7 @@ export function BimViewer() {
             />
             {/* Bottom-left stack, mirroring MapViewer: cards stack upward with flex so a new
                 overlay never needs a hand-tuned bottom offset. */}
-            <div className="absolute bottom-3 left-3 z-10 flex flex-col gap-2 pointer-events-none">
+            <div className="absolute bottom-20 md:bottom-3 left-3 z-10 flex max-w-[calc(100vw-1.5rem)] flex-col gap-2 pointer-events-none">
                 <SensorLegend />
             </div>
             <PropertiesMenu />

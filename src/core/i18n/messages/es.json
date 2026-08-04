@@ -232,7 +232,11 @@
     "clippingPlane": "Plano de recorte",
     "slice": "Cortar",
     "invert": "Invertir",
-    "reset": "Restablecer"
+    "reset": "Restablecer",
+    "add": "Añadir plano de recorte",
+    "cancelAdd": "Cancelar añadir plano de recorte",
+    "deleteAll": "Eliminar todos los planos de recorte",
+    "hint": "Haz doble clic en el modelo para añadir un plano de recorte. Retroceso elimina el plano bajo el cursor. Enter finaliza. Escape elimina todos los planos."
   },
   "CommentInput": {
     "title": "Añadir comentario",
@@ -465,6 +469,7 @@
   },
   "DrawingLayers": {
     "doorSwings": "Hojas de puertas",
+    "spaces": "Espacios",
     "fill": "Relleno",
     "cut": "Secciones cortadas",
     "toggleVisibility": "Toggle visibility",
@@ -712,6 +717,29 @@
     "expandTitle": "Expandir todo",
     "noResults": "No se encontraron elementos que coincidan con",
     "noneAvailable": "No hay estructura espacial disponible",
+    "drawingsGroup": "Planos",
+    "classifierGroup": "Clasificador",
+    "floorplansTab": "Plantas",
+    "elevationsTab": "Alzados",
+    "spatialTab": "Espacial",
+    "classesTab": "Clases IFC",
+    "ifcClasses": "Clases IFC",
+    "loadingClasses": "Cargando clases IFC...",
+    "noClasses": "No hay clases IFC disponibles",
+    "isolateTitle": "Aislar",
+    "isolateLabel": "Aislar {name}",
+    "showAllTitle": "Mostrar todo",
+    "toggleVisibilityLabel": "Alternar visibilidad de {name}",
+    "expandNodeLabel": "Expandir {name}",
+    "collapseNodeLabel": "Contraer {name}",
+    "appearanceTitle": "Color y opacidad",
+    "appearanceLabel": "Color y opacidad de {name}",
+    "colorTitle": "Elegir color",
+    "opacityLabel": "Opacidad",
+    "resetNodeLabel": "Restablecer",
+    "resetColorsTitle": "Restablecer colores",
+    "searchPlaceholder": "Buscar",
+    "resizeSectionsLabel": "Redimensionar secciones",
     "retryButton": "Reintentar",
     "appliedDatasetsTitle": "Conjuntos de datos aplicados",
     "appliedDatasetsEmpty": "No hay conjuntos de datos aplicados al mapa.",
@@ -759,7 +787,12 @@
     "edge": "Borde",
     "area": "Área",
     "volume": "Volumen",
-    "clear": "Limpiar"
+    "angle": "Ángulo",
+    "clear": "Limpiar",
+    "hintLength": "Haz doble clic en dos puntos para medir una distancia. Suprimir elimina la medición bajo el cursor. Escape sale.",
+    "hintArea": "Haz doble clic en cada esquina y luego pulsa Enter para cerrar la forma. Suprimir elimina la medición bajo el cursor. Escape sale.",
+    "hintVolume": "Haz doble clic en cada elemento para añadirlo y luego pulsa Enter para sumar el volumen. Suprimir elimina la medición bajo el cursor. Escape sale.",
+    "hintAngle": "Haz doble clic en tres puntos: inicio, vértice y final. Suprimir elimina la medición bajo el cursor. Escape sale."
   },
   "MeasureMapTool": {
     "distance": "Distancia",
@@ -771,6 +804,17 @@
     "area": "Área",
     "point": "Punto",
     "clear": "Limpiar"
+  },
+  "MeasurementSettings": {
+    "title": "Mediciones",
+    "lineColour": "Color de las mediciones",
+    "lengthUnits": "Unidades de longitud",
+    "areaUnits": "Unidades de área",
+    "volumeUnits": "Unidades de volumen",
+    "angleUnits": "Unidades de ángulo",
+    "precision": "Decimales",
+    "snapRange": "Alcance del ajuste",
+    "markerSize": "Tamaño del marcador de ajuste"
   },
   "MoreOptions": {
     "viewMap": "Ver en el mapa",
@@ -1003,6 +1047,7 @@
     "readyToView": "Lista",
     "infoTitle": "Más información",
     "convertTitle": "Convertir a Potree",
+    "retryUploadTitle": "La subida nunca se completó - haga clic para reintentar",
     "viewTitle": "Ver en el visor Potree",
     "deleteTitle": "Eliminar nube de puntos",
     "uploadedBy": "Subida por",
@@ -1186,9 +1231,6 @@
     "toastSuccessUpdate": "Sitio actualizado con éxito",
     "toastErrorUpdate": "Error al actualizar el sitio"
   },
-  "InfoSidebar": {
-    "resizeHandleLabel": "Redimensionar la barra lateral"
-  },
   "TabSelector": {
     "fileLabel": "Archivo",
     "layersTitle": "Capas",
@@ -1356,6 +1398,9 @@
     "email": "Correo electrónico",
     "role": "Rol",
     "roleUnknown": "Rol desconocido"
+  },
+  "ViewerSidebar": {
+    "resizeHandleLabel": "Redimensionar la barra lateral"
   },
   "ViewSection": {
     "floorplanTitle": "Planos de planta",
